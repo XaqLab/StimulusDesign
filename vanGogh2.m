@@ -43,7 +43,7 @@ classdef vanGogh2
             cond.noise_seed         = 100;
             cond.pattern_upscale    = 10;
             cond.pattern_width      = 32;
-            cond.duration           = 30;
+            cond.duration           = 60;
             cond.pattern_aspect     = 1.7;
             cond.gaborpatchsize     = 0.35; 
             cond.gabor_wlscale      = 4;
@@ -189,11 +189,38 @@ classdef vanGogh2
             
             Tstart  = 1 + fps*cond.pre_blank_period;
             YsVid   = Y(:,:,Tstart:end);
-            YsVid   = imresize(YsVid,cond.pattern_upscale,'lanczos3');
+            
+            f_up = cond.pattern_upscale;
+            kernel_sigma = f_up;
+            sz = f_up*size(YsVid(:,:,1));
+            [fy,fx] = ndgrid(...
+                (-floor(sz(1)/2):floor(sz(1)/2-0.5))*2*pi/sz(1), ...
+                (-floor(sz(2)/2):floor(sz(2)/2-0.5))*2*pi/sz(2));
+
+            fmask = exp(-(fy.^2 + fx.^2)*kernel_sigma.^2/2);
+            fmask = ifftshift(fmask);
+            Nframes_final = size(YsVid,3);
+            
+            img = zeros(Ny*f_up,Nx*f_up,Nframes_final);
+            
+            
+            for tt = 1:Nframes_final
+                Xt = YsVid(:,:,tt);
+                Xt = upsample(Xt', f_up, round(f_up/2))*f_up;
+                Xt = upsample(Xt', f_up, round(f_up/2))*f_up;
+                img(:,:,tt) = ifft2(fmask.*fft2(Xt));
+            end
+            
+            % K       = 12*0.00225; % hardcoded for now. LUT later
+            K       = 0.0125; % hardcoded for now. LUT later
+            img     = uint8(round(256*(img/2/K + 0.5)));
+            
+            % YsVid   = imresize(YsVid,cond.pattern_upscale,'lanczos3');
             % disp(std(YsVid(:)));
             % K       = 10*std(YsVid(:));
-            K       = 12*0.00225; % hardcoded for now. LUT later
-            img     = uint8(round(256*(YsVid/2/K + 0.5)));
+            % K       = 12*0.00225; % hardcoded for now. LUT later
+            % img     = uint8(round(256*(YsVid/2/K + 0.5)));
+            
              
             hash = 0;
         end
