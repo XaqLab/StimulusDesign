@@ -104,8 +104,6 @@ classdef vanGogh2
             CMap    = zeros(Ny,Nx,Nframes);  
             CMapExt = zeros(Ny,Nx,Nframes);
             
-            % Output
-            Y = zeros(Ny,Nx,Nframes);
             
             % Filter parameters
             % obtain the 2nd order filter parameter for the given filter BW
@@ -134,6 +132,21 @@ classdef vanGogh2
             % 2/a_c term is because that is the rough time scale for temporal averaging with the 2nd order IIR filter
             CMapExtOld1 = gamrnd(k,cond.filt_gammscale,[Ny,Nx]);
             CMapExtOld2 = gamrnd(k,cond.filt_gammscale,[Ny,Nx]);
+            
+            % generate filter for upscaling
+            f_up = cond.pattern_upscale;
+            kernel_sigma = f_up;
+            sz = f_up*[Ny,Nx];
+            [fy,fx] = ndgrid(...
+                (-floor(sz(1)/2):floor(sz(1)/2-0.5))*2*pi/sz(1), ...
+                (-floor(sz(2)/2):floor(sz(2)/2-0.5))*2*pi/sz(2));
+
+            fmask = exp(-(fy.^2 + fx.^2)*kernel_sigma.^2/2);
+            fmask = ifftshift(fmask);
+            
+            % Output
+            Y       = zeros(Ny,Nx,Nframes);
+            YsVid   = zeros(Ny*f_up,Nx*f_up,Nframes);
             
             
             for tt = 1:Nframes
@@ -184,47 +197,32 @@ classdef vanGogh2
                 
                 Wold2       = Wold1;
                 Wold1       = Wnew;
+                
+                % Upscaling
+                YsVid(:,:,tt) = upscale(Y(:,:,tt), fmask, f_up);
 
             end
             
             Tstart  = 1 + fps*cond.pre_blank_period;
-            YsVid   = Y(:,:,Tstart:end);
+            YsVid   = YsVid(:,:,Tstart:end);
             
-            f_up = cond.pattern_upscale;
-            kernel_sigma = f_up;
-            sz = f_up*size(YsVid(:,:,1));
-            [fy,fx] = ndgrid(...
-                (-floor(sz(1)/2):floor(sz(1)/2-0.5))*2*pi/sz(1), ...
-                (-floor(sz(2)/2):floor(sz(2)/2-0.5))*2*pi/sz(2));
-
-            fmask = exp(-(fy.^2 + fx.^2)*kernel_sigma.^2/2);
-            fmask = ifftshift(fmask);
-            Nframes_final = size(YsVid,3);
-            
-            img = zeros(Ny*f_up,Nx*f_up,Nframes_final);
-            
-            
-            for tt = 1:Nframes_final
-                Xt = YsVid(:,:,tt);
-                Xt = upsample(Xt', f_up, round(f_up/2))*f_up;
-                Xt = upsample(Xt', f_up, round(f_up/2))*f_up;
-                img(:,:,tt) = ifft2(fmask.*fft2(Xt));
-            end
-            
-            % K       = 12*0.00225; % hardcoded for now. LUT later
             K       = 0.0125; % hardcoded for now. LUT later
-            img     = uint8(round(256*(img/2/K + 0.5)));
+            img     = uint8(round(256*(YsVid/2/K + 0.5)));
             
-            % YsVid   = imresize(YsVid,cond.pattern_upscale,'lanczos3');
-            % disp(std(YsVid(:)));
-            % K       = 10*std(YsVid(:));
-            % K       = 12*0.00225; % hardcoded for now. LUT later
-            % img     = uint8(round(256*(YsVid/2/K + 0.5)));
-            
-             
+
             hash = 0;
         end
         
     end
 end
+
+
+function out = upscale(X, fmask, f_up)
+
+    X = upsample(X', f_up, round(f_up/2))*f_up;
+    X = upsample(X', f_up, round(f_up/2))*f_up;
+    out = ifft2(fmask.*fft2(X));
+       
+end
+                
 
