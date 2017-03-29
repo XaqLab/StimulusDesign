@@ -23,6 +23,11 @@ Parameters for the spatial Gaussian smoothing filter used to create orientation 
 gaussfilt_scale         : #  size of filter = Ny*gaussfilt_scale
 gaussfilt_istd          : #  inverse standard deviation 
 
+Parameters for the spatial Gaussian smoothing filter used to create
+external contrast field
+gaussfiltext_scale      : #  size of filter = Ny*gaussfiltext_scale
+gaussfiltext_istd       : #  inverse standard deviation 
+
 Parameters for temporal filtering. We use a 2nd order IIR filter.
 y(n) = 2(1-a)*y(n-1) - (1-a)^2*y(n-2) + a*x(n)
 filt_noiseBW            : #  BW (in Hz) for filter for noise input 
@@ -43,14 +48,16 @@ classdef vanGogh2
             cond.noise_seed         = 100;
             cond.pattern_upscale    = 10;
             cond.pattern_width      = 32;
-            cond.duration           = 60;
+            cond.duration           = 30;
             cond.pattern_aspect     = 1.7;
-            cond.gaborpatchsize     = 0.35; 
-            cond.gabor_wlscale      = 4;
+            cond.gaborpatchsize     = 0.28; % changed from 0.34 to 0.28
+            cond.gabor_wlscale      = 4; 
             cond.gabor_envscale     = 6;
             cond.gabor_ell          = 1;
-            cond.gaussfilt_scale    = 2; 
-            cond.gaussfilt_istd     = 3; 
+            cond.gaussfilt_scale    = 1; 
+            cond.gaussfilt_istd     = 2; 
+            cond.gaussfiltext_scale = 1;
+            cond.gaussfiltext_istd  = 2.4;
             cond.filt_noiseBW       = 0.5;
             cond.filt_oriBW         = 0.5;
             cond.filt_contBW        = 0.5;
@@ -98,6 +105,12 @@ classdef vanGogh2
             GaussFilt   = gausswin(fx,cond.gaussfilt_istd);     
             GaussFilt   = GaussFilt*GaussFilt'; 
             GaussFilt   = GaussFilt/sum(GaussFilt(:)); 
+            
+            % filter for smoothing used to generate external contrast field
+            fx          = Ny*cond.gaussfiltext_scale;              % size of filter in pixels
+            GaussFiltExt   = gausswin(fx,cond.gaussfiltext_istd);     
+            GaussFiltExt   = GaussFiltExt*GaussFiltExt'; 
+            GaussFiltExt   = GaussFiltExt/sum(GaussFiltExt(:)); 
             
             % Initialize the orientation and contrast fields
             OMap    = zeros(Ny,Nx,Nframes);
@@ -161,7 +174,7 @@ classdef vanGogh2
                 % Temporal filtering of gamma distributed noise
                 CMapExtNew      = 2*(1-a_c)*CMapExtOld1 - (1-a_c)^2*CMapExtOld2 + a_c*gamrnd(k,cond.filt_gammscale,[Ny,Nx]);
                 % Spatial filtering to generate external contrast field
-                CMapExtFilt     = convn(CMapExtNew,GaussFilt,'same');
+                CMapExtFilt     = convn(CMapExtNew,GaussFiltExt,'same');
                 CMapExt(:,:,tt) = CMapExtFilt;
                 
                 % Temporal filtering of white noise to generate input to
@@ -206,7 +219,8 @@ classdef vanGogh2
             Tstart  = 1 + fps*cond.pre_blank_period;
             YsVid   = YsVid(:,:,Tstart:end);
             
-            K       = 0.0125; % hardcoded for now. LUT later
+            % K       = 0.0125; % hardcoded for now. LUT later
+            K       = 0.03; % hardcoded for now. LUT later
             img     = uint8(round(256*(YsVid/2/K + 0.5)));
             
 
